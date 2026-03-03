@@ -1,0 +1,33 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: news-pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: news_user
+      POSTGRES_PASSWORD: dev_strong_9527
+      POSTGRES_DB: news_db
+    ports:
+      - "5433:5432"               # 主机端口用 5433，避免与本机冲突
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U news_user"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+  app:
+    build: .
+    container_name: news-app
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - .:/app  # 开发阶段方便热重载，生产可以去掉
+    command: python src/news/main.py   # 或其他入口
+volumes:
+  pgdata:

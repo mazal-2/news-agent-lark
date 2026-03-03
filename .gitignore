@@ -1,0 +1,67 @@
+# Python 标准忽略
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 虚拟环境（强烈建议全部忽略）
+.env
+.venv/
+venv/
+ENV/
+env/
+*.env
+
+# 依赖管理工具相关
+poetry.lock            # 如果以后切换到 poetry
+Pipfile.lock
+
+# 构建 / 分发产物
+build/
+dist/
+*.egg-info/
+*.eggs/
+*.whl
+*.tar.gz
+
+# 日志文件（尤其是 Docker 环境）
+*.log
+*.logs
+docker-compose.override.yml   # 个人本地覆盖文件，千万别提交
+
+# IDE / 编辑器
+.vscode/
+.idea/
+*.sublime-*
+*.swp
+*.swo
+*~
+
+# macOS / Windows 常见垃圾文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# 数据库相关（本地测试用）
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+
+# 项目最关键的敏感文件（已包含 .env，但再强调一次）
+.env*
+!.env.example          # ← 如果你准备提供 .env.example 给别人参考，可以保留这个
+
+# 临时测试文件、个人脚本
+tmp/
+temp/
+scratch/
+playground/
+*.test.py
+*.local.py
+
+# 如果你有本地开发的 docker volume 数据（慎用）
+postgres_data/
