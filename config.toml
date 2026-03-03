@@ -1,0 +1,9 @@
+[rss]
+urls = [
+    "https://www.cbsnews.com/latest/rss/main",
+    "https://www.cbsnews.com/latest/rss/technology",
+    "https://www.chinanews.com.cn/rss/finance.xml",
+]
+
+
+
