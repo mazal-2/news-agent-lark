@@ -140,7 +140,8 @@ def extract_entry_info(entry, source_url: str) -> Optional[Dict]:
         "link": str(link).strip(),
         "published": published_dt,
         "source": source,
-        "published_str": published_str  # 保留原始字符串用于调试
+        "published_str": published_str,  # 保留原始字符串用于调试
+        "content": None  # 占位，后续可以填充全文内容
     } 
 
 def format_datetime(published_str: str) -> Optional[datetime]:
@@ -288,6 +289,62 @@ def print_entries(entries: List[Dict], limit: int = 30) -> None:
         print(f"    来源: {source_domain}")
         print()  # 空行分隔
 
+import random
+import time
+import sys
+from typing import Optional
+import trafilatura
+
+def get_full_content(url: str) -> Optional[str]:
+    """
+    从给定 URL 提取文章正文（纯文本），使用 trafilatura 库。
+    如果提取失败或内容太短，返回 None。
+
+    返回:
+        提取到的正文（str），或 None（失败/空/太短）
+    """
+    # 随机延迟 3-5 秒，防止被网站封 IP
+    delay = random.uniform(3, 5)
+    time.sleep(delay)
+
+    try:
+        # 1. 下载网页
+        downloaded = trafilatura.fetch_url(url)
+        if downloaded is None:
+            print(f"Error: Failed to download URL: {url}", file=sys.stderr)
+            return None
+
+        # 2. 提取正文
+        text = trafilatura.extract(
+            downloaded,
+            include_links=False,
+            include_tables=False,
+            include_images=False,
+            no_fallback=True,
+            output_format="txt"
+        ) # output_format能够规定应该输出什么格式的文本
+
+        if text is None:
+            print(f"Error: Failed to extract content from: {url}", file=sys.stderr)
+            return None
+
+        # 清理空白字符
+        cleaned_text = text.strip()
+
+        # 3. 检查内容长度
+        if len(cleaned_text) < 80:
+            print(f"Warning: Content too short ({len(cleaned_text)} chars) from: {url}", file=sys.stderr)
+            return None
+
+        print(f"Successfully extracted {len(cleaned_text)} chars from: {url}", file=sys.stderr)
+        return cleaned_text
+
+    except Exception as e:
+        print(f"Error extracting content from {url}: {e}", file=sys.stderr)
+        return None
+
+
+
 async def main() -> None:
     """
     主协程：协调整个抓取流程
@@ -330,8 +387,8 @@ async def main() -> None:
         # 3. 创建任务列表
         print(f"开始并发抓取，最大并发数: {MAX_CONCURRENT}")
         tasks = [fetch_with_semaphore(client, url) for url in urls]
-
-        # 4. 并发执行
+# client； 这里面的semaphore函数函数获取的仅仅是rrs的url，而这个函数里面调用了fetch_feed函数，fetch_feed函数里面才是真正的抓取rss内容的函数
+        # 4. 并发执行， 对多个rss源进行抓取，获取每个rss源的文本内容
         results = await asyncio.gather(*tasks, return_exceptions=False)
 
     # 5. 收集结果
@@ -357,7 +414,7 @@ async def main() -> None:
     all_entries = []
     for url, feed_text in successful_feeds:
         entries = parse_feed(feed_text, url)
-        all_entries.extend(entries)
+        all_entries.extend(entries) # 对html/xml文本进行解析，提取出其中的条目，并将所有条目合并到一个列表中
 
     if not all_entries:
         print("错误: 没有成功解析到任何新闻条目")
@@ -369,6 +426,68 @@ async def main() -> None:
     # 8. 去重
     unique_entries = deduplicate_entries(all_entries)
     print(f"去重后剩余 {len(unique_entries)} 个条目")
+
+    # 9. 提取正文内容
+    print(f"\n开始提取正文内容...")
+    MAX_CONTENT_CONCURRENT = 5  # 控制并发数，避免被封IP
+
+    # 初始化content字段
+    for entry in unique_entries:
+        entry["content"] = None 
+
+    # 创建信号量控制并发
+    content_semaphore = asyncio.Semaphore(MAX_CONTENT_CONCURRENT)
+
+    async def fetch_content(entry): # 异步调用获取每个条目的链接，并使用get_full_content函数提取正文内容
+        async with content_semaphore:
+            url = entry["link"]
+            try:
+                # 在线程池中运行同步函数，避免阻塞事件循环
+                content = await asyncio.to_thread(get_full_content, url)
+                # 检查内容长度是否满足要求（至少100字符）
+                if content and len(content) >= 100:
+                    entry["content"] = content
+                    return True
+                else:
+                    entry["content"] = None
+                    return False
+            except Exception as e:
+                print(f"Error fetching content for {url}: {e}", file=sys.stderr)
+                entry["content"] = None
+                return False
+
+    # 创建所有任务
+    tasks = [fetch_content(entry) for entry in unique_entries]
+
+    # 跟踪进度
+    completed = 0
+    successful = 0
+    total = len(tasks)
+
+    # 使用asyncio.as_completed逐个等待任务完成，以便显示进度
+    print(f"正在提取 {total} 篇文章的正文，最大并发数: {MAX_CONTENT_CONCURRENT}")
+
+    for future in asyncio.as_completed(tasks):
+        try:
+            success = await future
+            completed += 1 # 这里面的是处理过的entry数量，完成则是cp，在这基础上再分成功/失败
+            if success:
+                successful += 1
+
+            # 每处理10条打印一次进度
+            if completed % 10 == 0 or completed == total:
+                print(f"  进度: {completed}/{total}，成功: {successful}")
+        except Exception as e:
+            completed += 1
+            print(f"  任务异常: {e}")
+
+    print(f"\n正文提取完成:")
+    print(f"  成功提取: {successful} 篇")
+    print(f"  提取失败: {total - successful} 篇")
+
+    # 过滤掉没有内容的条目（可选）
+    # entries_with_content = [entry for entry in unique_entries if entry["content"] is not None]
+    # print(f"  有内容的条目: {len(entries_with_content)} 个")
 
     # 9. 打印结果
     print_entries(unique_entries, limit=30)
@@ -382,6 +501,9 @@ async def main() -> None:
     print(f"  原始条目数: {len(all_entries)}")
     print(f"  去重后条目数: {len(unique_entries)}")
     print(f"{'='*60}")
+
+
+
 
 # 程序入口
 if __name__ == "__main__":
