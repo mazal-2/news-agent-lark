@@ -6,6 +6,8 @@ from lark_oapi import EventDispatcherHandler, Client as LarkClient
 import lark_oapi as lark
 from lark_oapi.api.im.v1 import CreateMessageRequest, P2ImMessageReceiveV1,CreateMessageRequestBody
 import uuid
+from langchain_core.messages import HumanMessage
+
 
 # 飞书应用配置
 APP_ID = "cli_a92f29aba3f8dceb"
@@ -106,16 +108,29 @@ def handle_receive_message(event: P2ImMessageReceiveV1) -> None:
         if not need_reply:
             return
        
-        from anews.agents.main_agent import generate_response
-        reply_text = generate_response(messages=text_content) # 这里只能暂时回答单次对话
+        #from anews.agents.main_agent import generate_response
+        #reply_text = generate_response(messages=text_content) # 这里只能暂时回答单次对话
+        from anews.agents.work_flow_rag import graph
 
+        initial_input = {
+            "messages":[HumanMessage(content=text_content)],
+            "clean_text":clean_text,
+            'response_type':None,
+            'final_reply':None
+        } # 不需要将这个State示例化么？
         
-        # reply_message 优化这个reply_need（should handle message）的逻辑，然后再可以做一个分流来整理这个回复的内容
-        if chat_id:
-            send_message(chat_id, reply_text) # 在此处再进行补充
-        else:
-            print("错误：chat_id 为空，无法回复")
+        thread_id = f'group_{chat_id}_user_{sender_id}'
+        try:
+            result = graph.invoke(  
+                input=initial_input,
+                config={'configurable':{'thread_id':thread_id}}
+            )
 
+        # reply_message 优化这个reply_need（should handle message）的逻辑，然后再可以做一个分流来整理这个回复的内容
+            reply_text = result.get("final_reply","抱歉没能理解您的意思")
+            send_message(chat_id, reply_text) # 在此处再进行补充
+        except Exception as e:
+            print(chat_id,"抱歉，处理过程出现了一点问题，请稍后再试")
             # TODO: 这里可以添加AI回复的逻辑，调用其他模块生成新闻摘要
 
     except Exception as e:
