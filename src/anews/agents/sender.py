@@ -100,24 +100,21 @@ def handle_receive_message(event: P2ImMessageReceiveV1) -> None:
         text_content = content_dict.get("text", "")
         print(f"✅ 收到消息！群: {chat_id} | 发送者: {sender_id} | 内容: {text_content}")
 
-        # 5. 关键词触发逻辑
-        content_for_check = text_content.lower()
-        # 检查是否被 @ (mentions 列表不为空)
-        has_mentions = message.mentions is not None and len(message.mentions) > 0
+        from anews.utils.handler import should_handle_message
+        need_reply, clean_text = should_handle_message(message,text_content)
 
-        if has_mentions or "早报" in content_for_check:
-            # 清理消息：去掉 "@机器人" 的文本标签，只保留真正的内容
-            clean_text = text_content
-            if has_mentions:
-                for mention in message.mentions:
-                    clean_text = clean_text.replace(mention.key, "").strip()
+        if not need_reply:
+            return
+       
+        from anews.agents.main_agent import generate_response
+        reply_text = generate_response(messages=text_content) # 这里只能暂时回答单次对话
 
-            reply_text = f"你好！解析到的指令是: {clean_text}\n我是财经新闻机器人，正在为您准备数据..."
-            
-            if chat_id:
-                send_message(chat_id, reply_text)
-            else:
-                print("错误：chat_id 为空，无法回复")
+        
+        # reply_message 优化这个reply_need（should handle message）的逻辑，然后再可以做一个分流来整理这个回复的内容
+        if chat_id:
+            send_message(chat_id, reply_text) # 在此处再进行补充
+        else:
+            print("错误：chat_id 为空，无法回复")
 
             # TODO: 这里可以添加AI回复的逻辑，调用其他模块生成新闻摘要
 

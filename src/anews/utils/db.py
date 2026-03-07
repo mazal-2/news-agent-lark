@@ -316,7 +316,7 @@ async def get_news_by_url(url: str) -> Optional[Dict[str, Any]]:
     FROM news_entries
     WHERE url = $1;
     """
-
+# sql命令+fetchrow能够将后面的参数填入到url
     try:
         async with get_connection() as conn:
             row = await conn.fetchrow(sql, url)
@@ -511,7 +511,8 @@ async def test_db_operations():
         print(f"测试过程中发生错误: {e}")
         await close_db()
 
-
+"""
 if __name__ == "__main__":
     # 直接运行此文件时执行测试
     asyncio.run(test_db_operations())
+"""
