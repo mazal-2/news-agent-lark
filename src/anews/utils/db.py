@@ -375,9 +375,13 @@ async def get_recent_news(limit: int = 50) -> List[Dict[str, Any]]:
         List[Dict]: 新闻条目字典列表
     """
     sql = """
-    SELECT id, url, title, published, source, content, summary, status, field, importance  created_at, updated_at
+    SELECT id, url, title, published, source, content, summary, 
+           status, field, importance, created_at, updated_at
     FROM news_entries
-    ORDER BY published DESC NULLS LAST, created_at DESC
+    WHERE status = 'processed'                    -- ← 新增：只取 AI 处理过的
+    ORDER BY published DESC NULLS LAST, 
+             importance DESC NULLS LAST,          -- 新增：同一天按重要性排序
+             created_at DESC
     LIMIT $1;
     """
 

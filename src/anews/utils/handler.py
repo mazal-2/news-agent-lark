@@ -1,8 +1,8 @@
-# reply_trigger.py 或 message_handler.py
+# 这里可以当作初次简单的筛选
 def should_handle_message(message, text_content: str) -> tuple[bool, str | None]:
     """
     判断当前消息是否需要机器人处理，并返回清理后的文本
-
+    message是一整条信息，里面包括了chat_id,sender这些元数据，text_content是就是message.content的内容，是一字符串
     返回:
         (是否需要处理, 清理后的纯文本 or None)
     """
@@ -28,3 +28,9 @@ def should_handle_message(message, text_content: str) -> tuple[bool, str | None]
     clean_text = " ".join(clean_text.split())
 
     return True, clean_text
+
+"""
+def generate_reponse_type(message)
+
+    收到message, 以及text_content后，由agent判断这其内容应该流向哪个langgraph.Node,输出财报（generate_report）、日常回答(solve_problem)等多个内容
+"""

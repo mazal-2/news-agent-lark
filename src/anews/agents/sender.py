@@ -22,6 +22,34 @@ lark_client = LarkClient.builder() \
     .build()
 
 
+
+def generate_post_content(news_content: str, title: str = "📊 每日财经早报") -> str:
+    """
+    正确构造飞书 post 富文本：每行一个 text 元素，实现换行
+    """
+    # 把 news_content 按 \n 拆成行
+    lines = news_content.split('\n')
+    
+    # 构建 content 数组：每行一个 [{"tag":"text", "text": line}]
+    content_lines = []
+    for line in lines:
+        if line.strip():  # 跳过空行，或可保留
+            content_lines.append([{"tag": "text", "text": line}])
+        else:
+            # 空行可以用空数组或特殊处理，这里简单加一个空 text
+            content_lines.append([{"tag": "text", "text": ""}])
+
+    post_struct = {
+            "zh_cn": {
+                "title": title,
+                "content": content_lines
+            }
+    }
+    
+    # 序列化时 ensure_ascii=False 保留 emoji 等
+    return json.dumps(post_struct, ensure_ascii=False)
+
+
 def send_message(chat_id: str, message: str, msg_type: str = "text") -> bool:
     """
     发送消息到飞书群聊
@@ -152,7 +180,6 @@ ws_client = Client(
     log_level=lark.LogLevel.DEBUG
 )
 
-
 def start_bot():
     """
     启动飞书机器人
@@ -168,20 +195,21 @@ def start_bot():
 
 def send_daily_news(chat_id: str, news_content: str):
     """
-    发送每日财经新闻
-
-    Args:
-        chat_id: 群聊ID
-        news_content: 新闻内容（由其他模块生成）
+    发送每日财经新闻（已适配分区版早报）
+    
+    修改点：
+    1. 使用更醒目的标题和 emoji
+    2. 不再额外包裹一层 formatted_news（因为 generate_morning_news_content 已经很完整）
+    3. 支持富文本发送（推荐改成 post 类型，更美观）
     """
-    print(f"向群 {chat_id} 发送每日财经新闻")
+    print(f"🚀 向群 {chat_id} 发送分区版每日早报")
 
-    # 可以在这里格式化新闻内容
-    formatted_news = f"📊 每日财经早报 📊\n\n{news_content}\n\n---\n数据来源：多家财经媒体"
+    # 推荐改成富文本 post（飞书显示效果更好）
+    # 如果你暂时不想改富文本，就保持 text 也完全没问题
+    post_content = generate_post_content(news_content)
 
-    success = send_message(chat_id, formatted_news)
+    success = send_message(chat_id, post_content, msg_type="post")   # 可改成 "post" 更美观
     return success
-
 
 if __name__ == "__main__":
     # 启动机器人
