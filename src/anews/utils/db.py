@@ -106,6 +106,8 @@ async def create_tables():
         content TEXT,
         summary TEXT,
         status TEXT DEFAULT 'pending',
+        field TEXT,
+        importance INTEGER,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
@@ -164,8 +166,8 @@ async def upsert_news_entry(entry: Dict[str, Any]) -> bool:
 
     sql = """
     INSERT INTO news_entries (
-        url, title, published, source, content, summary, status
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        url, title, published, source, content, summary, status, field, importance
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     ON CONFLICT (url) DO UPDATE SET
         title = EXCLUDED.title,
         published = EXCLUDED.published,
@@ -173,6 +175,8 @@ async def upsert_news_entry(entry: Dict[str, Any]) -> bool:
         content = COALESCE(EXCLUDED.content, news_entries.content),
         summary = COALESCE(EXCLUDED.summary, news_entries.summary),
         status = EXCLUDED.status,
+        field = COALESCE(EXCLUDED.field,news_entries.field),
+        importance = COALESCE(EXCLUDED.importance,news_entries.importance),
         updated_at = NOW()
     RETURNING id;
     """
@@ -188,6 +192,8 @@ async def upsert_news_entry(entry: Dict[str, Any]) -> bool:
                 entry.get("content"),  # $5: content
                 entry.get("summary"),  # $6: summary
                 entry.get("status", "pending"),  # $7: status
+                entry.get("field"),
+                entry.get("importance")
             )
 
             if result:
@@ -312,7 +318,7 @@ async def get_news_by_url(url: str) -> Optional[Dict[str, Any]]:
         Optional[Dict]: 新闻条目字典，如果未找到则返回 None
     """
     sql = """
-    SELECT id, url, title, published, source, content, summary, status, created_at, updated_at
+    SELECT id, url, title, published, source, content, summary, status, field, importance created_at, updated_at
     FROM news_entries
     WHERE url = $1;
     """
@@ -341,7 +347,7 @@ async def get_pending_news(limit: int = 100) -> List[Dict[str, Any]]:
         List[Dict]: 新闻条目字典列表
     """
     sql = """
-    SELECT id, url, title, published, source, content, summary, status, created_at, updated_at
+    SELECT id, url, title, published, source, content, summary, status,field, importance created_at, updated_at
     FROM news_entries
     WHERE status = 'pending'
     ORDER BY published DESC NULLS LAST, created_at DESC
@@ -369,7 +375,7 @@ async def get_recent_news(limit: int = 50) -> List[Dict[str, Any]]:
         List[Dict]: 新闻条目字典列表
     """
     sql = """
-    SELECT id, url, title, published, source, content, summary, status, created_at, updated_at
+    SELECT id, url, title, published, source, content, summary, status, field, importance  created_at, updated_at
     FROM news_entries
     ORDER BY published DESC NULLS LAST, created_at DESC
     LIMIT $1;
@@ -461,6 +467,59 @@ async def db_session():
         await close_db()
 
 
+async def update_news_analysis(url: str, analysis: Dict[str, Any]) -> bool:
+    """
+    接收 AI Agent 生成的结构化分析结果，一次性更新数据库中的分析字段并标记处理完成。
+
+    输入参数 (Args):
+        url (str): 
+            新闻条目的唯一标识符（URL）。用于定位需要更新的数据库行。
+        analysis (Dict[str, Any]): 
+            由 AI Agent 解析得到的 JSON 字典，必须包含以下键：
+            - "summary" (str): 100字以内的摘要，需包含新闻核心数据（如 NEV 销量或财务百分比）。
+            - "field" (str): 领域分类，仅限“国内宏观”、“产业新闻”、“公司动态”、“国外宏观”、“海外公司”之一。
+            - "importance" (float/int): 重要性评分，范围 0-5，支持 0.5 步进。
+
+    返回结果 (Returns):
+        bool: 
+            - True: 成功找到该 URL 并更新了字段，且 status 已变为 'processed'。
+            - False: 未找到该 URL，或数据库操作发生异常。
+
+    处理逻辑:
+        1. 使用 URL 作为 $4 占位符进行精确匹配。
+        2. 将 AI 提供的摘要、领域和分值分别填入 $1, $2, $3。
+        3. 自动将 status 字段从 'pending' 修改为 'processed'，无需人工干预。
+        4. 自动刷新 updated_at 时间戳为当前时间。
+    """
+    sql = """
+    UPDATE news_entries
+    SET 
+        summary = $1, 
+        field = $2, 
+        importance = $3, 
+        status = 'processed',  -- 在这里直接写死或传参，标记为已处理
+        updated_at = NOW()
+    WHERE url = $4
+    RETURNING id;
+    """
+    try:
+        async with get_connection() as conn:
+            result = await conn.fetchrow(
+                sql, 
+                analysis.get("summary"), 
+                analysis.get("field"), 
+                analysis.get("importance"), 
+                url
+            )
+            if result:
+                logger.info(f"AI 分析回填成功: {url}")
+                return True
+            return False
+    except Exception as e:
+        logger.error(f"回填 AI 分析时数据库报错: {e}")
+        return False
+
+
 # 测试函数
 async def test_db_operations():
     """测试数据库操作"""
@@ -475,7 +534,9 @@ async def test_db_operations():
             "source": "测试源",
             "content": "测试正文内容",
             "summary": "测试摘要",
-            "status": "pending"
+            "status": "pending",
+            "field":"海外宏观",
+            "importance":"3"
         }
 
         print("测试插入新闻条目...")
@@ -510,6 +571,31 @@ async def test_db_operations():
     except Exception as e:
         print(f"测试过程中发生错误: {e}")
         await close_db()
+
+async def get_one_pending_news() -> dict | None:
+    """
+    从 news_entries 表中取一条 status = 'pending' 的新闻（通常按发布时间倒序取最早未处理的）
+    返回完整的 entry 字典，或 None（没有待处理新闻）
+    不需要输出参数，会自动选取pending的一条新闻
+    """
+    sql = """
+    SELECT id, url, title, published, source, content, summary, status, field, importance, created_at, updated_at
+    FROM news_entries
+    WHERE status = 'pending'
+    ORDER BY published DESC NULLS LAST, created_at ASC
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED;   -- 防止并发重复处理
+    """
+
+    try:
+        async with get_connection() as conn:
+            row = await conn.fetchrow(sql)
+            if row:
+                return dict(row)
+            return None
+    except Exception as e:
+        logger.error(f"获取待处理新闻失败: {e}")
+        return None
 
 """
 if __name__ == "__main__":

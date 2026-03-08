@@ -8,10 +8,6 @@ from trafilatura import extract, fetch_url
 import sys
 from pathlib import Path
 
-# 将项目根目录添加到 Python 路径，以便导入 anews.utils
-project_root = Path(__file__).parent.parent.parent
-sys.path.insert(0, str(project_root))
-
 from anews.utils import db
 
 # 导入模块 (如上)
@@ -151,7 +147,9 @@ def extract_entry_info(entry, source_url: str) -> Optional[Dict]:
         "published_str": published_str,  # 保留原始字符串用于调试
         "content": None,  # 占位，后续可以填充全文内容
         "summary":None,
-        "status":"pending"
+        "status":"pending",
+        "field":None,
+        "importance":None
     } 
 
 def format_datetime(published_str: str) -> Optional[datetime]:
