@@ -12,12 +12,17 @@ dependencies = [
     "feedparser>=6.0.12",
     "httpx>=0.28.1",
     "langchain>=1.2.6",
+    "langchain-community>=0.4.1",
+    "langchain-ollama>=1.0.1",
     "langchain-openai>=1.1.7",
     "lark-oapi>=1.5.2",
     "psycopg2-binary>=2.9.10",
+    "asyncpg>=0.30.0",
     "python-dotenv>=1.2.1",
     "toml>=0.10.2",
     "trafilatura>=2.0.0",
+    "loguru>=0.7.3",
+    "langchain-deepseek>=1.0.1",
 ]
 
 [project.scripts]
