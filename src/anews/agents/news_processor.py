@@ -54,7 +54,7 @@ system_prompt = """
 
 prompt = ChatPromptTemplate.from_messages([("system",system_prompt),("human","标题：{title}\n正文：{content}")])
 
-analyzer = prompt | llm_dp.with_structured_output(NewsAnalysis)
+analyzer = prompt | llm.with_structured_output(NewsAnalysis)
 
 
 async def summarize_and_update_news() -> bool:
@@ -104,9 +104,18 @@ async def summarize_and_update_news() -> bool:
      #  await update_news_status(url, "failed")  # 如果你有这个函数
         return False
 
+async def process_pending_batch(limit=30):
+    processed = 0
+    while processed < limit:
+        success = await summarize_and_update_news()
+        if not success:
+            break
+        processed += 1
+        await asyncio.sleep(0.5)  # 防止打满模型限速
+    return processed
 
 async def test_processor():
-    success = await summarize_and_update_news()
+    success = await process_pending_batch(limit=10)
     print("本次处理是否成功:", success)
 
 
