@@ -7,7 +7,7 @@ import json
 import asyncio
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel,Field
-from anews.utils.db import get_one_pending_news,update_news_analysis
+from anews.infrastructure.db import get_one_pending_news,update_news_analysis
 from loguru import logger
 from langchain_deepseek import ChatDeepSeek
 

@@ -4,7 +4,7 @@ from datetime import datetime
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from anews.utils.db import get_recent_news,count_news,init_db
+from anews.infrastructure.db import get_recent_news,count_news,init_db
 from collections import defaultdict
 """
 1,每天八点半启动get_rss里面的集成函数，即抓取rss里面的新闻并实现信息储存；
@@ -15,9 +15,9 @@ from collections import defaultdict
 # scheduler.py
 from zoneinfo import ZoneInfo
 # 导入你的核心功能
-from anews.utils.get_rss import main as fetch_rss_main          # 抓取 + 入库
+from anews.infrastructure.get_rss import main as fetch_rss_main          # 抓取 + 入库
 from anews.agents.news_processor import process_pending_batch    # AI 处理 pending 新闻
-from anews.agents.sender import send_daily_news                  # 发送早报
+from anews.infrastructure.lark.sender import send_daily_news                  # 发送早报
 
 # 配置日志
 logging.basicConfig(
@@ -72,7 +72,7 @@ async def generate_morning_news_content() -> str:
     2. 按 field（领域）分组
     3. 每个领域只取 importance 最高的前 5 条
     """
-    from anews.utils.db import get_recent_news   # 确保导入你修改后的函数
+    from anews.infrastructure.db import get_recent_news   # 确保导入你修改后的函数
 
     news_list = await get_recent_news(limit=50)   # 取足够多，后面再截 Top5
 
@@ -130,7 +130,7 @@ async def main():
     # 每天 08:30 抓取最新RSS
     scheduler.add_job(
         job_fetch_rss,
-        trigger=CronTrigger(hour=14, minute=45),
+        trigger=CronTrigger(hour=8, minute=20),
         id="daily_fetch_rss",
         name="每日RSS抓取 & 入库",
         replace_existing=True
@@ -139,7 +139,7 @@ async def main():
     # 每天 08:45 开始AI处理（给抓取留15分钟缓冲）
     scheduler.add_job(
         job_process_news,
-        trigger=CronTrigger(hour=14, minute=50),
+        trigger=CronTrigger(hour=8, minute=30),
         id="daily_process_news",
         name="每日待处理新闻AI分析",
         replace_existing=True
@@ -148,7 +148,7 @@ async def main():
     # 每天 09:00 发送早报
     scheduler.add_job(
         job_send_morning_news,
-        trigger=CronTrigger(hour=15, minute=21),
+        trigger=CronTrigger(hour=9, minute=00),
         id="daily_send_news",
         name="每日财经早报群发",
         replace_existing=True

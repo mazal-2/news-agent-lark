@@ -8,7 +8,7 @@ from trafilatura import extract, fetch_url
 import sys
 from pathlib import Path
 
-from anews.utils import db
+from anews.infrastructure import db
 
 # 导入模块 (如上)
 
