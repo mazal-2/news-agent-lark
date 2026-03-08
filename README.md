@@ -119,5 +119,5 @@ python scripts/daily_finance_brief.py
 - 大模型依赖本地 Ollama（qwen3:8b），请提前启动 ollama serve
 - 首次运行建议先手动跑一次 `get_rss.py` + `news_processor.py` 确认数据流正常
 
-这是一个练习项目，结构和代码都还在快速迭代中，欢迎随意参考、复制、魔改。
+这是一个练习项目，结构和代码都还在迭代中
 ```

@@ -15,9 +15,9 @@ from collections import defaultdict
 # scheduler.py
 from zoneinfo import ZoneInfo
 # 导入你的核心功能
-from anews.infrastructure.get_rss import main as fetch_rss_main          # 抓取 + 入库
+from scripts.get_rss import main as fetch_rss_main          # 抓取 + 入库
 from anews.agents.news_processor import process_pending_batch    # AI 处理 pending 新闻
-from anews.infrastructure.lark.sender import send_daily_news                  # 发送早报
+from scripts.sender import send_daily_news                  # 发送早报
 
 # 配置日志
 logging.basicConfig(
